@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .ciede2000 import CIELab, ciede2000
 from .gs1 import Gs1ParseError, parse_gs1_label
 from .judge import judge
+from .release import evaluate_batch_release
 
 app = FastAPI(
     title="专色墨 ΔE00 比对 API",
@@ -144,3 +145,36 @@ def gs1_label(req: Gs1LabelRequest) -> Any:
             },
         )
     return {"ok": True, **parsed}
+
+
+class BatchReleaseRequest(BaseModel):
+    """批次放行单组合请求：标准色、样张 Lab 值与桶标签原文。
+
+    三个字段在结构上缺一不可且必须合法（Lab 越界/非有限、标签原文为空或过长
+    都会被整次拒绝，422）。色差超差与标签解析失败属于**业务核验结果**而非请求
+    非法，仍由 /api/batch-release 返回 200，在响应中分字段明确区分。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    standard: LabInput
+    sample: LabInput
+    raw_label: str = Field(..., min_length=1, max_length=512, description="标签原始文本")
+
+
+@app.post("/api/batch-release")
+def batch_release(req: BatchReleaseRequest) -> dict[str, Any]:
+    """一次请求完成色差放行判定与 GS1 标签核验，并在两项都通过时生成放行单。
+
+    - 复用 /api/delta-e 的色差判定与 /api/gs1-label 的解析规则；
+    - 色差超差或标签解析失败：HTTP 200、``released=False``、``release=None``，
+      两项核验结果（含解析失败代码与位置）分别返回，绝不生成半张凭据；
+    - 请求字段非法：由 pydantic 整次拒绝（422，字段明细），不产生任何核验结果；
+    - 放行单内嵌本次请求的原始输入快照，生成后与该请求固定对应。
+    本端点不影响 /api/delta-e 与 /api/gs1-label 两个既有独立入口。
+    """
+    return evaluate_batch_release(
+        standard=(req.standard.L, req.standard.a, req.standard.b),
+        sample=(req.sample.L, req.sample.a, req.sample.b),
+        raw_label=req.raw_label,
+    )

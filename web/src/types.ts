@@ -79,6 +79,63 @@ export interface Gs1LabelErrorResponse {
   position: number | null;
 }
 
+/* ── 批次放行单（色差 + 标签 一次组合请求） ─────────────────────────── */
+
+/** 一次组合请求的原始输入快照：凭据固定于这些值，逐字符/逐数值身份核对都以它为准。 */
+export interface ReleaseSnapshot {
+  standard: { L: number; a: number; b: number };
+  sample: { L: number; a: number; b: number };
+  /** 标签原文逐字符快照（含尾随空格、FNC1 等，不做任何归一） */
+  raw_label: string;
+}
+
+export interface ReleaseLabelError {
+  code: string;
+  message: string;
+  position: number | null;
+}
+
+/** 组合响应中的标签核验段：valid=true 时 batch/fields/format 有值，error 为 null。 */
+export interface ReleaseLabelVerdict {
+  valid: boolean;
+  format: Gs1LabelFormat | null;
+  fields: Gs1ParsedField[];
+  batch: Gs1BatchInfo | null;
+  error: ReleaseLabelError | null;
+}
+
+/** 组合响应中的色差核验段：与 /api/delta-e 的 result 同源。 */
+export interface ReleaseColorVerdict {
+  passed: boolean;
+  result: DeltaEResult;
+}
+
+/** 放行单：仅在色差放行且标签有效时生成；内嵌本次请求快照，生成即固定。 */
+export interface ReleaseNote {
+  number: string;
+  issued_at: string;
+  standard: { L: number; a: number; b: number };
+  sample: { L: number; a: number; b: number };
+  raw_label: string;
+  color: DeltaEResult;
+  batch: Gs1BatchInfo;
+}
+
+export interface BatchReleaseSuccessResponse {
+  ok: true;
+  snapshot: ReleaseSnapshot;
+  color: ReleaseColorVerdict;
+  label: ReleaseLabelVerdict;
+  released: boolean;
+  release: ReleaseNote | null;
+}
+
+export interface BatchReleaseErrorResponse {
+  ok: false;
+  message: string;
+  errors: FieldError[];
+}
+
 export const THRESHOLD = 2.0;
 export const EMPTY_FORM: LabForm = {
   standard: { L: "", a: "", b: "" },

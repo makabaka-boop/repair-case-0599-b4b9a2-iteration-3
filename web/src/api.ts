@@ -1,4 +1,6 @@
 import type {
+  BatchReleaseErrorResponse,
+  BatchReleaseSuccessResponse,
   DeltaEErrorResponse,
   DeltaESuccessResponse,
   Gs1LabelErrorResponse,
@@ -87,5 +89,57 @@ export async function postGs1Label(raw: string): Promise<Gs1LabelOutcome> {
     ok: false,
     status: res.status,
     error: body as Gs1LabelErrorResponse | null,
+  };
+}
+
+export type BatchReleaseOutcome =
+  | { ok: true; data: BatchReleaseSuccessResponse }
+  | {
+      /** false 覆盖 422 结构拒绝与网络层异常（status=0），与业务裁决 released=false 区分。 */
+      ok: false;
+      status: number;
+      error: BatchReleaseErrorResponse | null;
+    };
+
+/** 调用 /api/batch-release：一次请求完成色差判定 + 标签解析；网络层错误按“请求异常”处理。 */
+export async function postBatchRelease(payload: unknown): Promise<BatchReleaseOutcome> {
+  let res: Response;
+  try {
+    res = await fetch("/api/batch-release", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      error: {
+        ok: false,
+        message: "无法连接放行服务，请确认 API 已启动",
+        errors: [{ field: "network", message: "网络请求失败" }],
+      },
+    };
+  }
+
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {
+    body = null;
+  }
+
+  if (
+    res.ok &&
+    body &&
+    typeof body === "object" &&
+    (body as BatchReleaseSuccessResponse).ok === true
+  ) {
+    return { ok: true, data: body as BatchReleaseSuccessResponse };
+  }
+  return {
+    ok: false,
+    status: res.status,
+    error: body as BatchReleaseErrorResponse | null,
   };
 }
