@@ -20,6 +20,21 @@ export default defineConfig({
       },
     },
   },
+  // 本地无 nginx 时用 `vite preview` 做真实联调（Docker 流程仍由 nginx 反代）
+  preview: {
+    host: true,
+    port: Number(process.env.WEB_PORT ?? 4173),
+    proxy: {
+      "/api": {
+        target: `http://localhost:${apiPort}`,
+        changeOrigin: true,
+      },
+      "/health": {
+        target: `http://localhost:${apiPort}`,
+        changeOrigin: true,
+      },
+    },
+  },
   test: {
     globals: true,
     environment: "jsdom",

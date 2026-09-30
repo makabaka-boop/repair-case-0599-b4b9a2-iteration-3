@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .ciede2000 import CIELab, ciede2000
 from .gs1 import Gs1ParseError, parse_gs1_label
 from .judge import judge
+from .release import LabSnapshot, evaluate_batch_release
 
 app = FastAPI(
     title="专色墨 ΔE00 比对 API",
@@ -144,3 +145,32 @@ def gs1_label(req: Gs1LabelRequest) -> Any:
             },
         )
     return {"ok": True, **parsed}
+
+
+class BatchReleaseRequest(BaseModel):
+    """批次放行单请求：两组 Lab 值与标签原文在**同一次请求**中提交。
+
+    与两个独立入口相同：Lab 缺失/非有限/越界由字段校验器整次拒绝（422）；
+    标签原文为空串同样在进入组合裁决前拒绝。色差超差与 GS1 解析失败不属于
+    请求体校验错误，会在 200 响应里以两项核验明细分别返回（且不生成凭据）。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    standard: LabInput
+    sample: LabInput
+    label_raw: str = Field(..., min_length=1, max_length=512, description="标签原始文本")
+
+
+@app.post("/api/batch-release")
+def batch_release(req: BatchReleaseRequest) -> dict[str, Any]:
+    """组合流程：一次请求完成色差判定与 GS1 解析，双项通过才生成放行单。
+
+    与 /api/delta-e、/api/gs1-label 复用同一套规则；两项核验相互独立、同请求
+    内都执行。请求体校验失败仍走全局 422 处理器（整次拒绝）；色差超差或标签
+    解析失败返回 200，分别落在 ``color_check`` / ``label_check``，``release``
+    为 null（不生成半张凭据）。
+    """
+    standard = LabSnapshot(req.standard.L, req.standard.a, req.standard.b)
+    sample = LabSnapshot(req.sample.L, req.sample.a, req.sample.b)
+    return evaluate_batch_release(standard, sample, req.label_raw)

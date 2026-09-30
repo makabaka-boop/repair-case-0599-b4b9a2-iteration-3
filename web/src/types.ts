@@ -79,6 +79,67 @@ export interface Gs1LabelErrorResponse {
   position: number | null;
 }
 
+/* ── 批次放行单（可选组合流程） ─────────────────────────────────────── */
+
+/** 组合流程中标签核验失败明细：与 /api/gs1-label 422 体同源，但内嵌在 200 响应里。 */
+export interface BatchLabelError {
+  code: string;
+  message: string;
+  position: number | null;
+}
+
+export interface ColorCheck {
+  passed: boolean;
+  result: DeltaEResult;
+}
+
+export interface LabelCheckSuccess {
+  passed: true;
+  parsed: Gs1LabelSuccessResponse;
+}
+
+export interface LabelCheckFailure {
+  passed: false;
+  error: BatchLabelError;
+}
+
+export type LabelCheck = LabelCheckSuccess | LabelCheckFailure;
+
+/** 固定于生成请求的放行单：结构化字段 + 可复制整文 + 原始输入快照。 */
+export interface ReleaseDocument {
+  id: string;
+  generated_at: string;
+  standard: { L: number; a: number; b: number };
+  sample: { L: number; a: number; b: number };
+  result: DeltaEResult;
+  batch: Gs1BatchInfo;
+  label_raw: string;
+  text: string;
+}
+
+/** 一次组合请求的原始输入快照（数值即提交数值，标签原文逐字符回显）。 */
+export interface BatchReleaseInputs {
+  standard: { L: number; a: number; b: number };
+  sample: { L: number; a: number; b: number };
+  label_raw: string;
+}
+
+export interface BatchReleaseSuccessResponse {
+  ok: true;
+  released: boolean;
+  inputs: BatchReleaseInputs;
+  color_check: ColorCheck;
+  label_check: LabelCheck;
+  /** 只有色差放行且标签有效时非空；任何核验失败都为 null（不存在半张凭据） */
+  release: ReleaseDocument | null;
+}
+
+export interface BatchReleaseRequestError {
+  ok: false;
+  message: string;
+  errors: FieldError[];
+}
+
 export const THRESHOLD = 2.0;
 export const EMPTY_FORM: LabForm = {
   standard: { L: "", a: "", b: "" },

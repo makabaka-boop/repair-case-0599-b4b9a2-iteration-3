@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { postDeltaE } from "./api";
 import { BatchLabelPanel } from "./BatchLabelPanel";
+import { BatchReleasePanel } from "./BatchReleasePanel";
 import { ColorFieldSet } from "./ColorFieldSet";
 import { ResultPanel } from "./ResultPanel";
 import type {
@@ -175,6 +176,11 @@ export default function App() {
       {/* 标签核验与色差比对各自独立忙碌，互不锁定：标签请求不锁 Lab 输入/比对/重置，
           色差请求也不锁标签输入/核验；标签服务异常不阻断色差作业。 */}
       <BatchLabelPanel />
+
+      <hr className="divider" />
+
+      {/* 可选组合流程：自己的输入与凭据状态完全独立，不读写上方两个入口。 */}
+      <BatchReleasePanel />
     </main>
   );
 }

@@ -1,4 +1,6 @@
 import type {
+  BatchReleaseRequestError,
+  BatchReleaseSuccessResponse,
   DeltaEErrorResponse,
   DeltaESuccessResponse,
   Gs1LabelErrorResponse,
@@ -87,5 +89,63 @@ export async function postGs1Label(raw: string): Promise<Gs1LabelOutcome> {
     ok: false,
     status: res.status,
     error: body as Gs1LabelErrorResponse | null,
+  };
+}
+
+export type BatchReleaseOutcome =
+  | { ok: true; data: BatchReleaseSuccessResponse }
+  | { ok: false; status: number; error: BatchReleaseRequestError | null };
+
+/**
+ * 调用 /api/batch-release（可选组合流程）：一次请求返回色差与标签两项核验。
+ *
+ * 三种失败在此明确区分：
+ * - 200 + released=false：核验失败（超差/标签无效），两项明细在 data 内；
+ * - 422：请求体被整次拒绝（字段缺失/非有限/越界/标签空串），error 内有字段明细；
+ * - status=0：网络层异常（无法连接服务）。
+ */
+export async function postBatchRelease(payload: {
+  standard: { L: number; a: number; b: number };
+  sample: { L: number; a: number; b: number };
+  label_raw: string;
+}): Promise<BatchReleaseOutcome> {
+  let res: Response;
+  try {
+    res = await fetch("/api/batch-release", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      error: {
+        ok: false,
+        message: "无法连接放行服务，请确认 API 已启动",
+        errors: [{ field: "network", message: "网络请求失败" }],
+      },
+    };
+  }
+
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {
+    body = null;
+  }
+
+  if (
+    res.ok &&
+    body &&
+    typeof body === "object" &&
+    (body as BatchReleaseSuccessResponse).ok === true
+  ) {
+    return { ok: true, data: body as BatchReleaseSuccessResponse };
+  }
+  return {
+    ok: false,
+    status: res.status,
+    error: body as BatchReleaseRequestError | null,
   };
 }

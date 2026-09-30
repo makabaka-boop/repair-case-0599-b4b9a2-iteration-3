@@ -2,18 +2,20 @@ import type { DeltaEResult } from "./types";
 
 interface ResultPanelProps {
   result: DeltaEResult;
+  /** 同一页面嵌入多处时用不同 testid 隔离（默认保持既有 result-panel）。 */
+  testId?: string;
 }
 
 function fmt2(v: number): string {
   return v.toFixed(2);
 }
 
-export function ResultPanel({ result }: ResultPanelProps) {
+export function ResultPanel({ result, testId = "result-panel" }: ResultPanelProps) {
   const { passed } = result;
   return (
     <section
       className={`result ${passed ? "pass" : "fail"}`}
-      data-testid="result-panel"
+      data-testid={testId}
       data-passed={passed ? "true" : "false"}
       aria-live="polite"
     >
